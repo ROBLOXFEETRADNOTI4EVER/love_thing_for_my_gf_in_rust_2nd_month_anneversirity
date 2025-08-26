@@ -18,3 +18,6 @@ and self host the whole site  with my orange pi 5 plus ( so in meanwhile i will 
 
 
 
+in frontend creat a thing maybe with react or a lighter framework so it fetched every day the data form a mail 
+
+
