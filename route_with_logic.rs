@@ -15,7 +15,7 @@ use std::time::{SystemTime, UNIX_EPOCH, Duration};
 extern crate bcrypt;
 use bcrypt::{DEFAULT_COST, hash, verify};
 use anyhow::{ Result};
-use jsonwebtoken::{encode, decode, Header, Algorithm, Validation, EncodingKey, DecodingKey};
+use jsonwebtoken::{decode, encode, jwk, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use tokio::{
     fs::{File, OpenOptions},
     io::{self, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
@@ -264,8 +264,16 @@ pub struct NormalRequest{
     token:String
 }
 
+pub async  fn  read_whole_thing_and_submit(file_path: impl AsRef<BOB>) -> Result<String, std::io::Error>{
+    let path = file_path;
+    let mut file = File::open(path).await?;
+    let mut empty_string = String::new();
+    file.read_to_string(&mut empty_string).await?;
+    Ok(empty_string)
+}
+
 pub async fn next_daily_message(file: impl AsRef<BOB>) -> io::Result<Option<String>> {
-    let path = file.as_ref();
+    let path: &BOB = file.as_ref();
 
 
     let mut raw = String::new();
@@ -812,3 +820,46 @@ pub struct DeleteReq {
 
 
 
+
+
+pub async fn get_all_messages(Json(user): Json<NormalRequest>) -> (StatusCode, Json<String>) {
+    let jwt = user.token;
+
+    match jwt_is_valid(&jwt).await {
+        Ok(valid) => {
+            if !valid {
+                println!("Jwt Verify Failed Access Denied");
+                return (
+                    StatusCode::UNAUTHORIZED, // 401
+                    Json("Verify Failed Access Denied you been loged out try logging in again".to_string()),
+                );
+            }
+
+            let content: String = match read_whole_thing_and_submit("lovemain.txt").await {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!("Failed reading lovemain.txt: {e}");
+                   
+                    String::new()
+                }
+            };
+
+            let resultmsg = "ACCES GRANTED".to_string();
+            let body = json!({
+                "Main": resultmsg,
+                "Lovemsg": content
+            })
+            .to_string();
+
+            (StatusCode::OK, Json(body))
+        }
+
+        Err(e) => {
+            eprintln!("JWT validation error: {e}");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json("Internal error during token validation".to_string()),
+            )
+        }
+    }
+}
